@@ -1,0 +1,18 @@
+# Raw scraped comment pool — contains Reddit usernames and is an intermediate
+# artifact (reproducible via data/pull_reddit.py). The canonical, username-scrubbed
+# artifact committed to the repo is the labeled dataset CSV.
+data/raw_comments.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+
+# Secrets (never commit API keys)
+.env
+*.key
