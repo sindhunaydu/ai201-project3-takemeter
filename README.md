@@ -16,6 +16,29 @@ they actually *argue* an opinion about TV, rather than just asserting or emoting
 
 ---
 
+## Community choice — why r/television
+
+**Community:** [r/television](https://www.reddit.com/r/television/) (~19M members),
+the largest general TV-discussion subreddit.
+
+**Why this community.** r/television is high-volume and topically broad — drama,
+comedy, prestige TV, reality, streaming-industry news — so opinions arrive constantly
+and there's enough varied text to build a dataset without scraping one narrow fandom.
+More importantly, it's a community with an explicit, self-aware norm about *take
+quality*: regulars routinely praise comments that "actually back it up" and dismiss
+"low-effort hot takes" and "circle-jerk reactions." The thing I want to classify —
+how substantive a take is — is a distinction the community already makes, not one
+I'm imposing on neutral data.
+
+**Why comments, not submissions.** Submissions in r/television are almost entirely
+news headlines and links (renewals, casting, trailers). The actual takes live in the
+comment threads. Classifying submissions would produce a degenerate dataset — nearly
+all `reaction`-class announcements with almost no `hot_take` or `analysis`. The
+comment is the right unit of discourse here, and it's where the label variation that
+makes classification non-trivial actually lives.
+
+---
+
 ## The labels
 
 The whole taxonomy hangs on one question: **how much does the comment do to support a
@@ -27,15 +50,28 @@ take about TV?**
 | **`hot_take`** | A confident, substantive claim about TV (judgment, ranking, or factual-sounding assertion) stated **without** checkable support. |
 | **`reaction`** | An expressive, social, or purely informational comment (jokes, agreement, one-liners, questions, "name a show" answers, personal anecdotes) that **doesn't argue a take at all**. |
 
-**Real examples** (from r/television):
+**Real examples — two per label** (all from r/television):
 
-- `analysis` — *"HBO needed 7 seasons. GRRM said it could go to like 14 … S8 is only 6
-  episodes. You could take 3 of those episodes and put them in S7 and you'd have one
-  NORMAL season length."* (marshals specific episode/season counts into an argument)
-- `hot_take` — *"It is wild how much love he gets when pretty much everything he does
-  is trash."* (sweeping evaluative claim, zero evidence)
-- `reaction` — *"i agree completely with everything you said"* (social agreement,
-  no independent take)
+`analysis`:
+1. *"HBO needed 7 seasons. GRRM said it could go to like 14 … S8 is only 6 episodes.
+   You could take 3 of those episodes and put them in S7 and you'd have one NORMAL
+   season length."* — marshals specific episode/season counts into an argument; the
+   numbers are externally checkable.
+2. *"With The Bear, there's S3E5 (Children), which had the recurring argument between
+   the Faks … followed by Napkins, which felt closer to the best of S1/S2 Bear."* —
+   names specific episodes by title and number as evidence for an evaluative claim.
+
+`hot_take`:
+1. *"It is wild how much love he gets when pretty much everything he does is trash."*
+   — sweeping evaluative claim about a performer, zero evidence.
+2. *"You in for a spectacular ride. Final season is one of the BEST!"* — superlative
+   quality ranking asserted flatly, no specifics cited.
+
+`reaction`:
+1. *"i agree completely with everything you said"* — social agreement, contributes no
+   independent take.
+2. *"My wife and I both looked at each other when he said that. Amazing."* — personal
+   emotional response, no claim being argued.
 
 Full definitions, the ordered decision rules, and hard adjudication cases are in
 [`planning.md`](planning.md).
@@ -122,6 +158,79 @@ python3 data/build_dataset.py
 
 (`pull_reddit.py` shells out to `curl`. The pull is time-varying; the committed CSV is
 the canonical artifact.)
+
+---
+
+## Fine-tuning approach
+
+**Base model:** `distilbert-base-uncased` (HuggingFace) — a 67M-parameter distilled
+BERT variant, chosen because it fits on a free Colab T4 GPU within the session memory
+limit and trains to convergence in under 5 minutes, making the epoch/LR tuning loop
+fast. For a 210-example dataset a larger model would overfit faster and be harder to
+debug; DistilBERT is a reasonable match for the data scale.
+
+**Training setup:**
+- Framework: HuggingFace `Trainer` with `AutoModelForSequenceClassification`
+- Hardware: Google Colab T4 GPU (free tier)
+- Train/val/test split: 70/15/15, stratified by label, fixed seed for reproducibility
+- Training examples: 147 (70% of 210)
+
+**Hyperparameter decisions:**
+
+| hyperparameter | value | reasoning |
+|---|---|---|
+| epochs | 3 | Val accuracy still climbing at epoch 3 — intentionally undertrained to document the learning curve rather than overfit; more epochs is the first recommended fix |
+| learning rate | 2e-5 | Standard fine-tuning LR for BERT-family models; lower values (5e-6) converge too slowly on small datasets |
+| batch size | 16 | Fits T4 VRAM with 256-token max length; larger batches would require gradient accumulation |
+| max token length | 256 | Covers 95%+ of comments in the dataset without truncation; r/television comments rarely exceed 300 tokens |
+| weight decay | 0.01 | Default AdamW regularization; no tuning done here |
+
+The most consequential decision was **epochs = 3**: the loss curve showed the model
+barely leaving random-guess territory (training loss ≈ ln(3) throughout), and stopping
+at 3 epochs documents that failure honestly rather than masking it with extra training.
+
+---
+
+## Baseline
+
+**Model:** `llama-3.3-70b-versatile` via Groq API, zero-shot, temperature 0.
+
+**How results were collected:** The same 32-example held-out test set used for the
+fine-tuned model was passed to the Groq API one comment at a time. Each response was
+parsed for a single word (`analysis`, `hot_take`, or `reaction`); all 32 responses were
+parseable (0% parse failures — the "answer with one word only" instruction held).
+
+**Prompt used** (verbatim, `{text}` replaced with each test comment):
+
+```
+You are classifying a single comment from the r/television subreddit by DISCOURSE
+QUALITY into exactly one of three labels.
+
+analysis — an evaluative or interpretive claim about TV backed by at least one
+externally checkable specific (a rating, an episode/season count, a date, a named
+plot event, a production fact, or a figure) OR a structured multi-step argument.
+If you stripped out the opinion words, a reasoned case would still stand.
+
+hot_take — a confident, substantive claim about TV (a judgment, ranking, comparison,
+or factual-sounding assertion) stated WITHOUT checkable support.
+
+reaction — an expressive, social, or purely informational comment (a joke,
+exclamation, agreement, a question, a "name a show" answer, or a personal anecdote)
+that does NOT argue a take about the media.
+
+Decision rule, applied in order:
+1) If there is no substantive standalone claim about a show/episode/performer/industry,
+   answer reaction.
+2) Otherwise, if the claim is backed by a checkable specific or a structured argument,
+   answer analysis; if it is asserted without real support, answer hot_take.
+
+Respond with ONLY one word — analysis, hot_take, or reaction — and nothing else.
+
+Comment:
+{text}
+```
+
+Full baseline results and per-class breakdown are in [`baseline_results.md`](baseline_results.md).
 
 ---
 
