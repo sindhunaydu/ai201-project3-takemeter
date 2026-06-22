@@ -20,9 +20,9 @@ they actually *argue* an opinion about TV, rather than just asserting or emoting
 |---|---|---|
 | M1 | Community + label taxonomy | ✅ done — see [`planning.md`](planning.md) |
 | M2 | ≥200 labeled comments, train/val/test split | ✅ done — [`data/takemeter_dataset.csv`](data/takemeter_dataset.csv) |
-| M3 | Fine-tune `distilbert-base-uncased` (Colab T4) | ▶️ ready to run — [`TakeMeter_finetune.ipynb`](TakeMeter_finetune.ipynb) |
-| M4 | Zero-shot baseline (`llama-3.3-70b-versatile` via Groq) | ▶️ same notebook, same test set |
-| M5 | Evaluation report (accuracy, per-class F1, confusion matrix, error analysis) | ▶️ notebook emits `evaluation_results.json` + `confusion_matrix.png` |
+| M4 | Zero-shot baseline (`llama-3.3-70b-versatile` via Groq) | ✅ done — acc **0.656**, see [`baseline_results.md`](baseline_results.md) |
+| M3 | Fine-tune `distilbert-base-uncased` (Colab T4) | ▶️ next — starter notebook, same test split as the baseline |
+| M5 | Evaluation report (accuracy, per-class F1, confusion matrix, error analysis) | ⏳ pending — compare fine-tuned vs the 0.656 baseline |
 
 ---
 
