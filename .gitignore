@@ -1,7 +1,10 @@
-# Raw scraped comment pool — contains Reddit usernames and is an intermediate
-# artifact (reproducible via data/pull_reddit.py). The canonical, username-scrubbed
-# artifact committed to the repo is the labeled dataset CSV.
+# Intermediate working files behind the canonical labeled CSV.
+# raw_comments.json contains Reddit usernames; candidates.json/labels.json are the
+# filtered pool + raw annotations. The committed, username-scrubbed artifact is
+# data/takemeter_dataset.csv.
 data/raw_comments.json
+data/candidates.json
+data/labels.json
 
 # Python
 __pycache__/

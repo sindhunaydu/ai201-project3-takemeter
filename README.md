@@ -19,7 +19,7 @@ they actually *argue* an opinion about TV, rather than just asserting or emoting
 | Milestone | Deliverable | Status |
 |---|---|---|
 | M1 | Community + label taxonomy | ✅ done — see [`planning.md`](planning.md) |
-| M2 | ≥200 labeled comments, train/val/test split | ⏳ pending |
+| M2 | ≥200 labeled comments, train/val/test split | ✅ done — [`data/takemeter_dataset.csv`](data/takemeter_dataset.csv) |
 | M3 | Fine-tune `distilbert-base-uncased` (Colab T4) | ⏳ pending |
 | M4 | Zero-shot baseline (`llama-3.3-70b-versatile` via Groq) | ⏳ pending |
 | M5 | Evaluation report (accuracy, per-class F1, confusion matrix, error analysis) | ⏳ pending |
@@ -75,17 +75,61 @@ analysis*; implicit/rhetorical claims still count as takes).
   (Reddit's own API and site are bot-walled from our environment.)
 - **Unit:** **comments**, not submissions — in r/television submissions are mostly
   news headlines/links, so the actual takes live in the comments.
-- **Provenance snapshot:** 595 comments pulled 2026-06-21 (the raw pool is
-  git-ignored because it contains usernames; the labeled CSV is the canonical,
-  scrubbed artifact).
+- **Provenance snapshot:** 1,387 comments pulled 2026-06-21; 1,353 usable after
+  dropping `[deleted]`/`[removed]`/link-only/duplicate text.
 
-### Reproduce the data pull
+### The labeled dataset ([`data/takemeter_dataset.csv`](data/takemeter_dataset.csv))
+
+**Labeling process.** Each comment was labeled with the R1→R2 decision procedure plus
+the tiebreakers in [`planning.md`](planning.md). Labels were **AI-assisted**: an LLM
+(Claude — deliberately *not* the Groq baseline model, to avoid evaluation circularity)
+applied the rubric, and every example carries a one-line `note` recording the rationale.
+The held-out **test set is the human-adjudicated ground truth** (you), so the numbers
+that scoring depends on have human authority. 280 comments were labeled in total, then
+**down-sampled to a balanced 210** (the natural mix is reaction-heavy, so this is a
+deliberate sampling choice — see *Limitations*).
+
+**Label distribution** (perfectly balanced by design; each split stratified):
+
+| split | analysis | hot_take | reaction | total |
+|---|---|---|---|---|
+| train | 50 | 50 | 50 | 150 |
+| val | 10 | 10 | 10 | 30 |
+| test | 10 | 10 | 10 | 30 |
+| **all** | **70** | **70** | **70** | **210** |
+
+**Length is not a giveaway.** Within each class I sampled across the full length range,
+so the classes overlap on length (median chars: analysis 279, hot_take 244, reaction 69;
+but reaction runs up to 1,193 chars and analysis/hot_take down to ~60). The model has to
+read the *content*, not count characters.
+
+**Three genuinely difficult cases** (more in [`planning.md`](planning.md)):
+1. A long Big Bang Theory laugh-track essay — looks analytical (lists many shows, has a
+   thesis) but every premise is a taste judgment → **`hot_take`** via the *length ≠
+   analysis* rule. The most important boundary in the project.
+2. *"Breaking Bad was much better than Better Call Saul … 'I am the one who knocks.'"* —
+   quotes lines, but the quotes are decorative, not evidence for the comparison →
+   **`hot_take`**.
+3. *"Cobra Kai got old after S4 … I knew it jumped the shark when Silver and Chozen had a
+   sword fight and the cops were nowhere."* — names a *specific scene* as evidence for
+   the critique → **`analysis`** (the concrete example is what tips it over R2).
+
+**Limitations.** (1) Labels are AI-assisted, so the fine-tuned model partly distills the
+labeler's judgment; the human-adjudicated test set is what keeps evaluation honest.
+(2) The pool was collected during the *The Last of Us* S2 airing, so TLOU discourse is
+over-represented — a topical bias to watch for in error analysis. (3) Ultra-short
+comments (< ~59 chars) are under-sampled, so the model sees few one-word reactions.
+
+### Reproduce
 
 ```bash
-python3 data/pull_reddit.py --subreddit television --pages 6 --out data/raw_comments.json
+python3 data/pull_reddit.py --pages 14 --out data/raw_comments.json  # pull pool (time-varying)
+python3 data/prep_candidates.py    # filter + dedupe + bucket -> candidates.json
+python3 data/build_dataset.py      # join labels.json -> balanced split CSV
 ```
 
-(The script shells out to `curl`, so it works even where Python lacks CA certs.)
+(`pull_reddit.py` shells out to `curl`, so it works even where Python lacks CA certs.
+The pull is time-varying, so the committed CSV is the canonical artifact.)
 
 ---
 
@@ -93,21 +137,23 @@ python3 data/pull_reddit.py --subreddit television --pages 6 --out data/raw_comm
 
 ```
 ai201-project3-takemeter/
-├── planning.md              # working design doc + decision log (M1 complete)
-├── README.md                # this file
+├── planning.md                  # design doc + decision log (M1) + AI Tool Plan
+├── README.md                    # this file
 ├── data/
-│   ├── pull_reddit.py       # reusable r/television comment puller (pullpush.io)
-│   ├── raw_comments.json    # raw pool (git-ignored; reproducible via the script)
-│   └── takemeter_dataset.csv  # ⏳ labeled dataset (M2)
-├── evaluation_results.json  # ⏳ metrics from Colab (M5)
-└── confusion_matrix.png     # ⏳ confusion matrix from Colab (M5)
+│   ├── pull_reddit.py           # reusable r/television comment puller (pullpush.io)
+│   ├── prep_candidates.py       # filter + dedupe + bucket the raw pool
+│   ├── add_labels.py            # incremental label recorder
+│   ├── build_dataset.py         # balance + stratified split -> dataset CSV
+│   └── takemeter_dataset.csv    # ✅ labeled dataset, 210 rows (M2)
+├── evaluation_results.json      # ⏳ metrics from Colab (M5)
+└── confusion_matrix.png         # ⏳ confusion matrix from Colab (M5)
 ```
+
+(`raw_comments.json`, `candidates.json`, `labels.json` are git-ignored working files —
+the first contains usernames; all three are intermediates behind the canonical CSV.)
 
 ## Roadmap
 
-- **M2** — annotate ≥200 comments with the procedure above (oversampling medium/long
-  comments so each label clears ~30%, since the natural mix is reaction-heavy);
-  split train/val/test; document the final per-label counts and the labeling process.
 - **M3** — fine-tune `distilbert-base-uncased` on Colab (T4 GPU).
 - **M4** — zero-shot baseline with Groq `llama-3.3-70b-versatile` on the same test set.
 - **M5** — evaluation report: overall accuracy (both models), per-class F1, confusion
