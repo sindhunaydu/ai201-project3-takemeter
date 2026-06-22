@@ -135,6 +135,73 @@ The pull is time-varying, so the committed CSV is the canonical artifact.)
 
 ---
 
+## Evaluation
+
+**Headline: fine-tuning did *not* beat the zero-shot baseline.** The fine-tuned
+DistilBERT scored **0.625** on the 32-example test set (12/32 wrong) vs the zero-shot
+Groq baseline's **0.656** ([`baseline_results.md`](baseline_results.md)).
+
+**Training run** (`distilbert-base-uncased`, 3 epochs):
+
+| epoch | training loss | validation loss | val accuracy |
+|---|---|---|---|
+| 1 | 1.0986 | 1.1023 | 0.323 |
+| 2 | 1.0872 | 1.0924 | 0.387 |
+| 3 | 1.0835 | 1.0696 | 0.548 |
+
+The training loss barely drops below **1.0986 = ln(3)**, the loss of random guessing on
+3 classes — the model hardly learned. But validation loss falls monotonically and val
+accuracy is *still climbing* at epoch 3 (0.32 → 0.39 → 0.55), so the model is
+**under-trained, not over-fit**: more epochs is the first thing to try.
+
+### Three wrong predictions, analyzed
+
+**A — a long `hot_take` read as `analysis`** *(true `hot_take` → pred `analysis`, conf 0.37)*
+> *"That was one of the best episodes of the show for me. Easily the best of the season. I know season two and especially Bella are being criticized a lot (sometimes unfairly) but I think this episode showed…"*
+
+Every claim here is a taste judgment ("best episode," "criticized unfairly") with no
+checkable specific — a textbook `hot_take` under the *length ≠ analysis* rule (T4). The
+model went the other way: it saw length, a measured tone, and the discourse markers of
+argument ("I know X, but I think…") and called it `analysis`. It learned **surface form**
+(length + argumentative register) as a proxy for substance — exactly the shortcut T4 was
+written to block. It never learned the actual test ("is the support externally checkable?").
+
+**B — a short `hot_take` read as `reaction`** *(true `hot_take` → pred `reaction`, conf 0.34)*
+> *"House of the dragon season 2 is the biggest culprit of this."*
+
+This is a real evaluative claim — a superlative ranking ("the biggest culprit") naming a
+season as the worst offender of whatever the thread is discussing → `hot_take`. But it's
+short and **context-dependent** ("of this" points at a parent comment the model never
+sees), so on the surface it looks like a throwaway line, and the model defaulted to
+`reaction`. Paired with **A**, this is the core pattern: the model uses **length as a
+proxy** — long → analysis, short → reaction — so `hot_take`, the *middle* class defined by
+reasoning quality rather than length, gets squeezed out from both ends. (Same failure as
+the baseline: `hot_take` recall stuck at **0.36** in *both* models.)
+
+**C — annotation ambiguity, `reaction` vs `hot_take`** *(true `reaction` → pred `hot_take`, conf 0.35)*
+> *"So it's not fine at all then…. it'll be shit till the end."*
+
+Here the model's "error" is defensible. My rule T2 calls a *bare-valence* dismissal
+("shit") a `reaction` — affect, nothing to argue. But "it'll be shit till the end" is also
+a forward-looking quality *prediction*, which reads as an unsupported `hot_take`. The
+boundary is razor-thin and the model picked the other reasonable side. Several of the 12
+errors are like this (e.g. #12, *"that's very much the tone of the show, IMO"*), so part of
+the error rate is **irreducible label noise**, not model failure — and it means my own T2
+calls on these one-liners cap how high *any* model can score on this test set.
+
+### What the model learned vs. what I intended
+
+I intended the model to separate *substance* (`analysis`), *bare opinion* (`hot_take`),
+and *non-takes* (`reaction`) via the R1/R2 logic. With only 147 training examples and a
+near-flat loss curve, it instead learned a weak **length/surface heuristic** and never
+captured the `hot_take` middle — the very distinction this project is about. My M4
+hypothesis (fine-tuning would lift `hot_take` recall from 0.36 toward ≥0.60) was
+**falsified**: it stayed at 0.36. Two honest takeaways: the model is *undertrained* (try
+more epochs), and some labels are genuinely ambiguous (**C**), so a chunk of the gap is
+task subjectivity, not model capacity.
+
+---
+
 ## Running M3–M5 (the notebook)
 
 [`TakeMeter_finetune.ipynb`](TakeMeter_finetune.ipynb) does fine-tuning, the baseline,
