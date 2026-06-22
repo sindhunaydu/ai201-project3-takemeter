@@ -20,9 +20,9 @@ they actually *argue* an opinion about TV, rather than just asserting or emoting
 |---|---|---|
 | M1 | Community + label taxonomy | ✅ done — see [`planning.md`](planning.md) |
 | M2 | ≥200 labeled comments, train/val/test split | ✅ done — [`data/takemeter_dataset.csv`](data/takemeter_dataset.csv) |
-| M3 | Fine-tune `distilbert-base-uncased` (Colab T4) | ⏳ pending |
-| M4 | Zero-shot baseline (`llama-3.3-70b-versatile` via Groq) | ⏳ pending |
-| M5 | Evaluation report (accuracy, per-class F1, confusion matrix, error analysis) | ⏳ pending |
+| M3 | Fine-tune `distilbert-base-uncased` (Colab T4) | ▶️ ready to run — [`TakeMeter_finetune.ipynb`](TakeMeter_finetune.ipynb) |
+| M4 | Zero-shot baseline (`llama-3.3-70b-versatile` via Groq) | ▶️ same notebook, same test set |
+| M5 | Evaluation report (accuracy, per-class F1, confusion matrix, error analysis) | ▶️ notebook emits `evaluation_results.json` + `confusion_matrix.png` |
 
 ---
 
@@ -133,20 +133,39 @@ The pull is time-varying, so the committed CSV is the canonical artifact.)
 
 ---
 
+## Running M3–M5 (the notebook)
+
+[`TakeMeter_finetune.ipynb`](TakeMeter_finetune.ipynb) does fine-tuning, the baseline,
+and evaluation end-to-end:
+
+1. Open it in [Google Colab](https://colab.research.google.com/) (`File → Upload notebook`,
+   or open from GitHub).
+2. `Runtime → Change runtime type → T4 GPU`.
+3. In the 🔑 **Secrets** panel add `GROQ_API_KEY` (your key) and enable notebook access.
+4. `Runtime → Run all`. It pulls the dataset from this repo automatically, fine-tunes
+   DistilBERT, runs the zero-shot Groq baseline on the **same test set**, prints both
+   classification reports, and writes/downloads `evaluation_results.json` +
+   `confusion_matrix.png`.
+5. Commit those two files to the repo root, then we'll write up the M5 report
+   (metrics table, ≥3 analyzed errors, learned-vs-intended reflection) — the notebook's
+   last cell already prints the misclassified test comments to analyze.
+
 ## Repo structure
 
 ```
 ai201-project3-takemeter/
 ├── planning.md                  # design doc + decision log (M1) + AI Tool Plan
 ├── README.md                    # this file
+├── TakeMeter_finetune.ipynb     # ▶️ Colab notebook: fine-tune + baseline + eval (M3–M5)
 ├── data/
 │   ├── pull_reddit.py           # reusable r/television comment puller (pullpush.io)
 │   ├── prep_candidates.py       # filter + dedupe + bucket the raw pool
 │   ├── add_labels.py            # incremental label recorder
 │   ├── build_dataset.py         # balance + stratified split -> dataset CSV
+│   ├── build_notebook.py        # generates TakeMeter_finetune.ipynb
 │   └── takemeter_dataset.csv    # ✅ labeled dataset, 210 rows (M2)
-├── evaluation_results.json      # ⏳ metrics from Colab (M5)
-└── confusion_matrix.png         # ⏳ confusion matrix from Colab (M5)
+├── evaluation_results.json      # ⏳ produced by the notebook (M5)
+└── confusion_matrix.png         # ⏳ produced by the notebook (M5)
 ```
 
 (`raw_comments.json`, `candidates.json`, `labels.json` are git-ignored working files —
