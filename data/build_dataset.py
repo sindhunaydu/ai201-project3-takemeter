@@ -1,8 +1,9 @@
-"""Join candidates + labels -> balanced, length-diverse, stratified-split dataset CSV.
+"""Join candidates + labels -> balanced, length-diverse, single labeled CSV.
 
 - Balance: downsample each class to N_PER_CLASS, picking a length-diverse spread so
   length is not a giveaway for the label (reaction is naturally short, analysis long).
-- Split: stratified 70/15/15 so every split has the same class balance.
+- Output: ONE complete labeled file (text, label, note) -- NOT pre-split. The Colab
+  notebook does the 70/15/15 train/val/test split automatically.
 - Scrub: replace u/username mentions so no usernames ship in the committed CSV.
 """
 import csv, json, random, re
@@ -48,36 +49,25 @@ selected = []
 for k in LABEL_ID:
     selected += [(r, k) for r in length_diverse(by_class[k], N_PER_CLASS)]
 
-# stratified split per class: 70/15/15
-final = []
-for k in LABEL_ID:
-    items = [r for r, kk in selected if kk == k]
-    random.shuffle(items)
-    n = len(items); n_test = round(0.15 * n); n_val = round(0.15 * n)
-    for i, r in enumerate(items):
-        split = "test" if i < n_test else ("val" if i < n_test + n_val else "train")
-        r = dict(r)
-        r.update({"label_id": LABEL_ID[k], "pre_label": k, "final_label": k,
-                  "pre_labeled": True, "changed": False, "split": split})
-        final.append(r)
+# single complete labeled file -- NOT pre-split (the notebook splits 70/15/15)
+final = [r for r, _ in selected]
 random.shuffle(final)
 
-cols = ["id", "text", "label", "label_id", "score", "char_len",
-        "pre_label", "final_label", "pre_labeled", "changed", "note", "split"]
+cols = ["text", "label", "note"]            # the three columns the notebook needs
 with open("takemeter_dataset.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=cols)
+    w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
     w.writeheader()
     for r in final:
-        w.writerow({c: r[c] for c in cols})
+        w.writerow(r)
 
 # report
 from collections import Counter
-print(f"\nwrote takemeter_dataset.csv  ({len(final)} rows)")
-for sp in ["train", "val", "test"]:
-    c = Counter(r["label"] for r in final if r["split"] == sp)
-    print(f"  {sp:5s} ({sum(c.values()):3d}): analysis {c['analysis']}  hot_take {c['hot_take']}  reaction {c['reaction']}")
-# length sanity: median length per class (should overlap, not be cleanly separable)
 import statistics
+c = Counter(r["label"] for r in final); n = len(final)
+print(f"\nwrote takemeter_dataset.csv  ({n} rows, single unsplit file: {cols})")
 for k in LABEL_ID:
+    print(f"  {k:8s}: {c[k]} ({100*c[k]/n:.0f}%)")
+print(f"  max label share: {100*max(c.values())/n:.0f}%  (must be < 70%)")
+for k in LABEL_ID:               # length sanity: classes should overlap, not separate cleanly
     ls = sorted(r["char_len"] for r in final if r["label"] == k)
     print(f"  {k:8s} char_len  min {ls[0]:4d}  median {int(statistics.median(ls)):4d}  max {ls[-1]:4d}")

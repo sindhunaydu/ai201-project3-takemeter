@@ -84,19 +84,21 @@ analysis*; implicit/rhetorical claims still count as takes).
 the tiebreakers in [`planning.md`](planning.md). Labels were **AI-assisted**: an LLM
 (Claude — deliberately *not* the Groq baseline model, to avoid evaluation circularity)
 applied the rubric, and every example carries a one-line `note` recording the rationale.
-The held-out **test set is the human-adjudicated ground truth** (you), so the numbers
-that scoring depends on have human authority. 280 comments were labeled in total, then
-**down-sampled to a balanced 210** (the natural mix is reaction-heavy, so this is a
-deliberate sampling choice — see *Limitations*).
+Per the AI Tool Plan, these pre-labels should be **reviewed by you** before training (the
+notebook chooses the test split, so review especially weighs there). 280 comments were
+labeled in total, then **down-sampled to a balanced 210** (the natural mix is
+reaction-heavy, so this is a deliberate sampling choice — see *Limitations*).
 
-**Label distribution** (perfectly balanced by design; each split stratified):
+**Label distribution** (perfectly balanced by design — max label share 33%, well under
+the 70% imbalance threshold). The CSV is a **single, un-split** file (`text`, `label`,
+`note`); the notebook does the 70/15/15 train/val/test split automatically.
 
-| split | analysis | hot_take | reaction | total |
-|---|---|---|---|---|
-| train | 50 | 50 | 50 | 150 |
-| val | 10 | 10 | 10 | 30 |
-| test | 10 | 10 | 10 | 30 |
-| **all** | **70** | **70** | **70** | **210** |
+| label | count | share |
+|---|---|---|
+| analysis | 70 | 33% |
+| hot_take | 70 | 33% |
+| reaction | 70 | 33% |
+| **total** | **210** | **100%** |
 
 **Length is not a giveaway.** Within each class I sampled across the full length range,
 so the classes overlap on length (median chars: analysis 279, hot_take 244, reaction 69;
